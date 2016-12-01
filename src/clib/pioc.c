@@ -55,12 +55,12 @@ int PIOc_File_is_Open(int ncid)
 }
 
 /**
- * Set the error handling method to be used for subsequent pio
- * library calls, returns the previous method setting.
+ * Set the error handling method to be used for subsequent pio library
+ * calls for a file. The function returns the previous method setting.
  *
  * @param ncid the ncid of an open file
  * @param method the error handling method
- * @returns 0 on success, error code otherwise
+ * @returns previous setting
  */
 int PIOc_Set_File_Error_Handling(int ncid, int method)
 {
@@ -75,6 +75,56 @@ int PIOc_Set_File_Error_Handling(int ncid, int method)
     oldmethod = file->iosystem->error_handler;
     file->iosystem->error_handler = method;
     return oldmethod;
+}
+
+/**
+ * Set the error handling method to be used for subsequent pio library
+ * calls for a file. The function returns the previous method setting.
+ *
+ * @param ncid the ncid of an open file
+ * @param method the error handling method
+ * @returns 0 for success, error code otherwise
+ */
+int PIOc_set_file_error(int ncid, int method)
+{
+    iosystem_desc_t *ios;  /* Pointer to io system information. */
+    file_desc_t *file;     /* Pointer to file information. */
+    int mpierr = MPI_SUCCESS, mpierr2;  /* Return code from MPI function codes. */
+    int ret;
+
+    /* Find info for this file. */
+    if ((ret = pio_get_file(ncid, &file)))
+        return ret;
+    ios = file->iosystem;    
+
+    /* If async is in use, and this is not an IO task, bcast the parameters. */
+    if (ios->async_interface)
+    {
+        if (!ios->ioproc)
+        {
+            int msg = PIO_MSG_SET_FILE_ERROR_HANDLING; /* Message for async notification. */
+
+            if (ios->compmaster)
+                mpierr = MPI_Send(&msg, 1, MPI_INT, ios->ioroot, 1, ios->union_comm);
+
+            if (!mpierr)
+                mpierr = MPI_Bcast(&ncid, 1, MPI_INT, ios->compmaster, ios->intercomm);
+            if (!mpierr)
+                mpierr = MPI_Bcast(&method, 1, MPI_INT, ios->compmaster, ios->intercomm);
+            LOG((2, "PIOc_set_file_error ncid = %d method = %d", ncid, method));
+        }
+
+        /* Handle MPI errors. */
+        if ((mpierr2 = MPI_Bcast(&mpierr, 1, MPI_INT, ios->comproot, ios->my_comm)))
+            return check_mpi(file, mpierr2, __FILE__, __LINE__);
+        if (mpierr)
+            return check_mpi(file, mpierr, __FILE__, __LINE__);
+    }
+
+    /* Remember the new error handler on all tasks. */
+    file->iosystem->error_handler = method;
+    
+    return PIO_NOERR;
 }
 
 /**
@@ -184,12 +234,12 @@ int PIOc_get_local_array_size(int ioid)
 }
 
 /**
- * @ingroup PIO_error_method
  * Set the error handling method used for subsequent calls.
  *
  * @param iosysid the IO system ID
  * @param method the error handling method
- * @returns 0 on success, error code otherwise
+ * @returns previous error hanlder setting.
+ * @ingroup PIO_error_method
  */
 int PIOc_Set_IOSystem_Error_Handling(int iosysid, int method)
 {

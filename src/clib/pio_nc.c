@@ -227,7 +227,7 @@ int PIOc_inq_type(int ncid, nc_type xtype, char *name, PIO_Offset *sizep)
 {
     iosystem_desc_t *ios;  /* Pointer to io system information. */
     file_desc_t *file;     /* Pointer to file information. */
-    int ierr = PIO_NOERR;  /* Return code from function calls. */
+    int ierr;              /* Return code from function calls. */
     int mpierr = MPI_SUCCESS, mpierr2;  /* Return code from MPI function codes. */
     int typelen;
 

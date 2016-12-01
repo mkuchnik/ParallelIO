@@ -1802,7 +1802,6 @@ int readdarray_handler(iosystem_desc_t *ios)
 }
 
 /** This function is run on the IO tasks to set the error handler.
- * NOTE: not yet implemented
  *
  * @param ios pointer to the iosystem_desc_t data.
  *
@@ -1810,7 +1809,39 @@ int readdarray_handler(iosystem_desc_t *ios)
  * from netCDF base function.
  * @internal
  */
-int seterrorhandling_handler(iosystem_desc_t *ios)
+int set_file_error_handler(iosystem_desc_t *ios)
+{
+    int ncid;
+    int method;
+    int mpierr;
+    int ret;
+    
+    assert(ios);
+    
+    /* Get the parameters for this function that the the comp master
+     * task is broadcasting. */
+    if ((mpierr = MPI_Bcast(&ncid, 1, MPI_INT, 0, ios->intercomm)))
+        return PIO_EIO;
+    if ((mpierr = MPI_Bcast(&method, 1, MPI_INT, 0, ios->intercomm)))
+        return PIO_EIO;
+    LOG((1, "set_file_error_handler ncid = %d", ncid));
+
+    /* Call the function. */
+    if ((ret = PIOc_set_file_error(ncid, method)))
+        return ret;
+
+    return PIO_NOERR;
+}
+
+/** This function is run on the IO tasks to set the error handler.
+ *
+ * @param ios pointer to the iosystem_desc_t data.
+ *
+ * @returns 0 for success, PIO_EIO for MPI Bcast errors, or error code
+ * from netCDF base function.
+ * @internal
+ */
+int set_iosys_error_handler(iosystem_desc_t *ios)
 {
     assert(ios);
     return PIO_NOERR;
@@ -2217,8 +2248,11 @@ int pio_msg_handler2(int io_rank, int component_count, iosystem_desc_t **iosys,
         case PIO_MSG_READDARRAY:
             readdarray_handler(my_iosys);
             break;
-        case PIO_MSG_SETERRORHANDLING:
-            seterrorhandling_handler(my_iosys);
+        case PIO_MSG_SET_FILE_ERROR_HANDLING:
+            set_file_error_handler(my_iosys);
+            break;
+        case PIO_MSG_SET_IOSYS_ERROR_HANDLING:
+            set_file_error_handler(my_iosys);
             break;
         case PIO_MSG_SET_CHUNK_CACHE:
             set_chunk_cache_handler(my_iosys);
