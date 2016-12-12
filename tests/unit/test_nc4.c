@@ -106,6 +106,45 @@ int test_deletefile(int iosysid, int num_flavors, int *flavor, int my_rank)
     return PIO_NOERR;
 }
 
+/* Test some put and get functions. */
+int test_put_get(int iosysid, int num_flavors, int *flavor, int my_rank)
+{
+    int ncid;
+    int ret;    /* Return code. */
+    
+    /* Use PIO to create the example file in each of the four
+     * available ways. */
+    for (int fmt = 0; fmt < num_flavors; fmt++)
+    {
+        char filename[NC_MAX_NAME + 1]; /* Test filename. */
+        char iotype_name[NC_MAX_NAME + 1];
+
+        /* Set error handling. */
+        PIOc_Set_IOSystem_Error_Handling(ncid, PIO_RETURN_ERROR);
+
+        /* Create a filename. */
+        if ((ret = get_iotype_name(flavor[fmt], iotype_name)))
+            return ret;
+        sprintf(filename, "put_get_%s_%s.nc", TEST_NAME, iotype_name);
+
+        printf("%d testing delete for file %s with format %d...\n",
+               my_rank, filename, flavor[fmt]);
+        if ((ret = PIOc_createfile(iosysid, &ncid, &(flavor[fmt]), filename, PIO_CLOBBER)))
+            ERR(ret);
+
+        /* End define mode. */
+        if ((ret = PIOc_enddef(ncid)))
+            ERR(ret);
+
+        /* Close the netCDF file. */
+        printf("%d Closing the sample data file...\n", my_rank);
+        if ((ret = PIOc_closefile(ncid)))
+            ERR(ret);
+    }
+
+    return PIO_NOERR;
+}
+
 /* Test the netCDF-4 optimization functions. */
 int test_nc4(int iosysid, int num_flavors, int *flavor, int my_rank)
 {
@@ -326,10 +365,17 @@ int test_all(int iosysid, int num_flavors, int *flavor, int my_rank)
     int ret; /* Return code. */
     
     /* Test file deletes. */
+    printf("%d testing deletefile\n", my_rank);
     if ((ret = test_deletefile(iosysid, num_flavors, flavor, my_rank)))
         return ret;
 
+    /* Test some reads and writes. */
+    printf("%d testing put and get\n", my_rank);
+    if ((ret = test_put_get(iosysid, num_flavors, flavor, my_rank)))
+        return ret;
+    
     /* Test netCDF-4 functions. */
+    printf("%d testing netcdf-4 functions\n", my_rank);
     if ((ret = test_nc4(iosysid, num_flavors, flavor, my_rank)))
         return ret;
 
