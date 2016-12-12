@@ -70,7 +70,7 @@ int test_deletefile(int iosysid, int num_flavors, int *flavor, int my_rank)
         char iotype_name[NC_MAX_NAME + 1];
 
         /* Set error handling. */
-        PIOc_Set_IOSystem_Error_Handling(ncid, PIO_RETURN_ERROR);
+        PIOc_Set_IOSystem_Error_Handling(iosysid, PIO_RETURN_ERROR);
 
         /* Create a filename. */
         if ((ret = get_iotype_name(flavor[fmt], iotype_name)))
@@ -110,6 +110,8 @@ int test_deletefile(int iosysid, int num_flavors, int *flavor, int my_rank)
 int test_put_get(int iosysid, int num_flavors, int *flavor, int my_rank)
 {
     int ncid;
+    int varid;
+    int dimid[NDIM];
     int ret;    /* Return code. */
     
     /* Use PIO to create the example file in each of the four
@@ -120,7 +122,7 @@ int test_put_get(int iosysid, int num_flavors, int *flavor, int my_rank)
         char iotype_name[NC_MAX_NAME + 1];
 
         /* Set error handling. */
-        PIOc_Set_IOSystem_Error_Handling(ncid, PIO_RETURN_ERROR);
+        PIOc_Set_IOSystem_Error_Handling(iosysid, PIO_RETURN_ERROR);
 
         /* Create a filename. */
         if ((ret = get_iotype_name(flavor[fmt], iotype_name)))
@@ -132,12 +134,57 @@ int test_put_get(int iosysid, int num_flavors, int *flavor, int my_rank)
         if ((ret = PIOc_createfile(iosysid, &ncid, &(flavor[fmt]), filename, PIO_CLOBBER)))
             ERR(ret);
 
+        /* Create dimensions. */
+        for (int d = 0; d < NDIM; d++)
+            if ((ret = PIOc_def_dim(ncid, dim_name[d], dim_len[d], &dimid[d])))
+                ERR(ret);
+
+        /* Create variable. */
+        printf("%d Defining netCDF variable %s, ndims %d\n", my_rank, VAR_NAME, NDIM);
+        if ((ret = PIOc_def_var(ncid, VAR_NAME, PIO_FLOAT, NDIM, dimid, &varid)))
+            ERR(ret);
+
         /* End define mode. */
         if ((ret = PIOc_enddef(ncid)))
             ERR(ret);
 
         /* Close the netCDF file. */
         printf("%d Closing the sample data file...\n", my_rank);
+        if ((ret = PIOc_closefile(ncid)))
+            ERR(ret);
+
+        /* Reopen the file. */
+        if ((ret = PIOc_openfile(iosysid, &ncid, &(flavor[fmt]), filename, PIO_NOWRITE)))
+            ERR(ret);
+
+        /* Check the dimensions. */
+        for (int d = 0; d < NDIM; d++)
+        {
+            char dim_name_in[PIO_MAX_NAME + 1];
+            PIO_Offset dim_len_in;
+            if ((ret = PIOc_inq_dim(ncid, d, dim_name_in, &dim_len_in)))
+                ERR(ret);
+            if (strncmp(dim_name_in, dim_name[d], PIO_MAX_NAME) || dim_len_in != dim_len[d])
+                ERR(ERR_WRONG);
+        }
+
+        /* Check the variable. */
+        {
+            char var_name_in[PIO_MAX_NAME + 1];
+            nc_type xtype_in;
+            int ndims_in, dimids_in[NDIM], natts_in;
+            
+            if ((ret = PIOc_inq_var(ncid, varid, var_name_in, &xtype_in, &ndims_in, dimids_in, &natts_in)))
+                ERR(ret);
+            if (strncmp(var_name_in, VAR_NAME, PIO_MAX_NAME) || xtype_in != PIO_FLOAT || ndims_in != NDIM ||
+                natts_in != 0)
+                ERR(ERR_WRONG);
+            for (int d = 0; d < NDIM; d++)
+                if (dimids_in[d] != dimid[d])
+                    ERR(ERR_WRONG);
+        }
+
+        /* Close the file. */
         if ((ret = PIOc_closefile(ncid)))
             ERR(ret);
     }
