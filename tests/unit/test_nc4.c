@@ -148,6 +148,16 @@ int test_put_get(int iosysid, int num_flavors, int *flavor, int my_rank)
         if ((ret = PIOc_enddef(ncid)))
             ERR(ret);
 
+        /* Write some data. */
+        {
+            PIO_Offset start[NDIM] = {0, 0, 0};
+            PIO_Offset count[NDIM] = {1, 1, 1};
+            float data = 42.42;
+            
+            if ((ret = PIOc_put_vara_float(ncid, varid, start, count, &data)))
+                ERR(ret);
+        }
+
         /* Close the netCDF file. */
         printf("%d Closing the sample data file...\n", my_rank);
         if ((ret = PIOc_closefile(ncid)))
